@@ -76,10 +76,6 @@ def runprog(topic, param=None):
 
     publish = "%s/report" % topic
 
-    param_str = param if param is not None and all(c in string.printable for c in param) == True else ''
-
-    logging.info(f'Recieved {"" if param_str else "empty "}message in {topic}{": " if param_str else ""}{param_str}')
-
     if param is not None and all(c in string.printable for c in param) == False:
         logging.debug(f"Param for topic {topic} is not printable; skipping")
         return
@@ -111,7 +107,7 @@ def runprog(topic, param=None):
 def on_message(mosq, userdata, msg):
     logging.debug(f"{msg.topic} {msg.qos} {msg.payload}")
 
-    runprog(msg.topic, str(msg.payload))
+    runprog(msg.topic, str(msg.payload.decode()))
 
 
 def on_connect(mosq, userdata, flags, result_code):
