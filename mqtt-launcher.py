@@ -1,6 +1,7 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 # Copyright (c) 2014 Jan-Piet Mens <jpmens()gmail.com>
+# Copyright (c) 2014-2020 Jan-Piet Mens <jpmens()gmail.com>; Maximilian Miller <miller.deutschland()gmail.com>
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -27,57 +28,64 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-__author__    = 'Jan-Piet Mens <jpmens()gmail.com>'
-__copyright__ = 'Copyright 2014 Jan-Piet Mens'
+__author__    = 'Jan-Piet Mens <jpmens()gmail.com>; Maximilian Miller <miller.deutschland()gmail.com>'
+__copyright__ = 'Copyright 2014-2020 Jan-Piet Mens; Maximilian Miller'
 
 import os
 import sys
 import subprocess
 import logging
-import paho.mqtt.client as paho   # pip install paho-mqtt
+import paho.mqtt.client as paho
 import time
 import socket
 import string
 
-qos=2
+QOS=2
 CONFIG=os.getenv('MQTTLAUNCHERCONFIG', 'launcher.conf')
 
 class Config(object):
     def __init__(self, filename=CONFIG):
         self.config = {}
-        execfile(filename, self.config)
+        exec(compile(open(filename).read(), filename, 'exec'), self.config)
+        del self.config['__builtins__']
 
     def get(self, key, default=None):
         return self.config.get(key, default)
 
 try:
     cf = Config()
-except Exception, e:
-    print "Cannot load configuration from file %s: %s" % (CONFIG, str(e))
+except Exception as e:
+    print(f"Cannot load configuration from file {CONFIG}: {e}")
     sys.exit(2)
 
 LOGFILE = cf.get('logfile', 'logfile')
 LOGFORMAT = '%(asctime)-15s %(message)s'
-DEBUG=True
+LOGLEVEL = cf.get('loglevel')
+
+DEBUG = True if LOGLEVEL and LOGLEVEL == "debug" else False
 
 if DEBUG:
     logging.basicConfig(filename=LOGFILE, level=logging.DEBUG, format=LOGFORMAT)
 else:
     logging.basicConfig(filename=LOGFILE, level=logging.INFO, format=LOGFORMAT)
 
-logging.info("Starting")
-logging.debug("DEBUG MODE")
+logging.info("Starting mqtt-launcher...")
+logging.info(f'Loglevel: {"DEBUG" if DEBUG else "INFO"}')
 
 def runprog(topic, param=None):
 
     publish = "%s/report" % topic
 
+    param_str = param if param is not None and all(c in string.printable for c in param) == True else ''
+
+    logging.info(f'Recieved {"" if param_str else "empty "}message in {topic}{": " if param_str else ""}{param_str}')
+
     if param is not None and all(c in string.printable for c in param) == False:
-        logging.debug("Param for topic %s is not printable; skipping" % (topic))
+        logging.debug(f"Param for topic {topic} is not printable; skipping")
         return
 
     if not topic in topiclist:
-        logging.info("Topic %s isn't configured" % topic)
+        logging.info(f"Topic {topic} isn't configured")
         return
 
     if param is not None and param in topiclist[topic]:
@@ -86,34 +94,36 @@ def runprog(topic, param=None):
         if None in topiclist[topic]: ### and topiclist[topic][None] is not None:
             cmd = [p.replace('@!@', param) for p in topiclist[topic][None]]
         else:
-            logging.info("No matching param (%s) for %s" % (param, topic))
+            logging.info(f"No matching param ({param}) for {topic}")
             return
 
-    logging.debug("Running t=%s: %s" % (topic, cmd))
+    logging.debug(f"Running t={topic}: {cmd}")
 
     try:
         res = subprocess.check_output(cmd, stdin=None, stderr=subprocess.STDOUT, shell=False, universal_newlines=True, cwd='/tmp')
-    except Exception, e:
-        res = "*****> %s" % str(e)
+    except Exception as e:
+        res = f"*****> {e}"
 
     payload = res.rstrip('\n')
-    (res, mid) =  mqttc.publish(publish, payload, qos=qos, retain=False)
+    (res, mid) =  mqttc.publish(publish, payload, qos=QOS, retain=False)
 
 
 def on_message(mosq, userdata, msg):
-    logging.debug(msg.topic+" "+str(msg.qos)+" "+str(msg.payload))
+    logging.debug(f"{msg.topic} {msg.qos} {msg.payload}")
 
     runprog(msg.topic, str(msg.payload))
+
 
 def on_connect(mosq, userdata, flags, result_code):
     logging.debug("Connected to MQTT broker, subscribing to topics...")
     for topic in topiclist:
-        mqttc.subscribe(topic, qos)
+        mqttc.subscribe(topic, QOS)
 
 
 def on_disconnect(mosq, userdata, rc):
-    logging.debug("OOOOPS! launcher disconnects")
+    logging.debug("mqtt-launcher disconnects.")
     time.sleep(10)
+
 
 if __name__ == '__main__':
 
@@ -128,7 +138,6 @@ if __name__ == '__main__':
     clientid = cf.get('mqtt_clientid', 'mqtt-launcher-%s' % os.getpid())
     # initialise MQTT broker connection
     mqttc = paho.Client(clientid, clean_session=False)
-
 
     mqttc.on_message = on_message
     mqttc.on_connect = on_connect
@@ -154,4 +163,3 @@ if __name__ == '__main__':
             time.sleep(5)
         except KeyboardInterrupt:
             sys.exit(0)
-

@@ -1,5 +1,7 @@
 # mqtt-launcher
 
+(Forked from jpmens/mqtt-launcher for Python >= 3.6)
+
 _mqtt-launcher_ is a Python program which subscribes to a set of [MQTT] topics
 and executes processes on the host it's running on. Launchable processes are
 configured on a per/wildcard basis, and they can be constrained to run only if
@@ -103,7 +105,7 @@ _mqtt-launcher_ logs its operation in the file configured as `logfile`.
 ## Requirements
 
 * Python
-* [paho-mqtt](https://pypi.python.org/pypi/paho-mqtt/1.3.1)
+* [paho-mqtt](https://pypi.python.org/pypi/paho-mqtt/1.5.0)
 
 ## Credits
 
